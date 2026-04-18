@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contacts</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .note-preview-area {
+            padding: 0 16px 14px;
+        }
+        .note-preview-text {
+            font-size: 0.82rem;
+            font-style: italic;
+            color: #888;
+            display: inline;
+        }
+        .note-preview-text a {
+            color: inherit;
+            text-decoration: none;
+        }
+        .note-preview-text a:hover {
+            color: #555;
+        }
+        .contact-card > a {
+            display: block;
+            padding: 14px 16px 10px;
+        }
+        .contact-card > .note-preview-area {
+            padding: 0 16px 14px;
+        }
+
+        .note-preview-cycling {
+            display: inline;
+            cursor: pointer;
+            font-size: 0.82rem;
+            font-style: italic;
+            color: #888;
+        }
+        .note-preview-cycling:hover {
+            color: #444;
+        }
+        .fade-out {
+            opacity: 0;
+            transition: opacity 1s ease;
+        }
+        .fade-in {
+            opacity: 1;
+            transition: opacity 1s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Contacts</h1>
+            <p class="subtitle">{{ contacts|length }} people</p>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+
+        <form class="search-form" method="get">
+            <input type="text" name="search" placeholder="Search contacts..." value="{{ search }}">
+            <select name="sort">
+                <option value="name_asc"   {% if sort == 'name_asc' %}selected{% endif %}>A → Z</option>
+                <option value="name_desc"  {% if sort == 'name_desc' %}selected{% endif %}>Z → A</option>
+                <option value="newest"     {% if sort == 'newest' %}selected{% endif %}>Newest first</option>
+                <option value="oldest"     {% if sort == 'oldest' %}selected{% endif %}>Oldest first</option>
+            </select>
+            <select name="filter">
+                <option value="">All</option>
+                {% for rel in relationships %}
+                <option value="{{ rel }}" {% if filter_rel == rel %}selected{% endif %}>{{ rel }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit">Apply</button>
+            {% if search or sort != 'name_asc' or filter_rel %}
+            <a href="/" class="btn-clear">Clear</a>
+            {% endif %}
+        </form>
+
+        <section class="contact-list">
+            {% if contacts %}
+            <ul>
+                {% for contact in contacts %}
+                <li class="contact-card">
+                    <a href="/contact/{{ contact.id }}">
+                        <div class="contact-name">{{ contact.name }}</div>
+                        <div class="contact-meta">
+                            {% if contact.relationship %}<span class="tag">{{ contact.relationship }}</span>{% endif %}
+                            {% if contact.birthday %}<span class="birthday">🎂 {{ contact.birthday|format_birthday }}</span>{% endif %}
+                        </div>
+                    </a>
+                    <div class="note-preview-area" id="preview-area-{{ contact.id }}">
+                        {% set contact_notes = notes_by_contact.get(contact.id, []) %}
+                        {% if contact_notes|length == 0 %}
+                            <span class="note-preview-text">No notes yet</span>
+                        {% elif contact_notes|length == 1 %}
+                            <span class="note-preview-text">
+                                <a href="/contact/{{ contact.id }}">{{ contact_notes[0].preview }}</a>
+                            </span>
+                        {% else %}
+                            <span class="note-preview-cycling"
+                                  id="preview-text-{{ contact.id }}"
+                                  data-contact-id="{{ contact.id }}">
+                                {{ contact_notes[0].preview }}
+                            </span>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty">
+                {% if search or filter_rel %}
+                No contacts match{% if search %} "{{ search }}"{% endif %}{% if filter_rel %} in "{{ filter_rel }}"{% endif %}.
+                {% else %}
+                No contacts yet. Add one below.
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="add-form">
+            <h2>Add Contact</h2>
+            <form method="post" action="/contact/add">
+                <div class="form-row">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <input type="text" name="relationship" placeholder="Relationship (friend, colleague...)">
+                </div>
+                <div class="form-row">
+                    <input type="date" name="birthday" placeholder="Birthday">
+                    <button type="submit">Add</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <script>
+        // All notes data — loaded once, clean JSON from tojson in a script block
+        var ALL_NOTES = {{ notes_by_contact|tojson }};
+
+        (function() {
+            function randomBetween(min, max) {
+                return Math.floor(Math.random() * (max - min + 1)) + min;
+            }
+
+            function shuffle(array) {
+                var arr = array.slice();
+                for (var i = arr.length - 1; i > 0; i--) {
+                    var j = Math.floor(Math.random() * (i + 1));
+                    var temp = arr[i];
+                    arr[i] = arr[j];
+                    arr[j] = temp;
+                }
+                return arr;
+            }
+
+            function startCycle(contactId, notes) {
+                var el = document.getElementById('preview-text-' + contactId);
+                if (!el) return;
+
+                var shuffled = shuffle(notes);
+                var index = 0;
+
+                el.classList.add('fade-in');
+
+                function showNext() {
+                    el.classList.remove('fade-in');
+                    el.classList.add('fade-out');
+
+                    setTimeout(function() {
+                        index = (index + 1) % shuffled.length;
+                        el.textContent = shuffled[index].preview;
+                        el.classList.remove('fade-out');
+                        el.classList.add('fade-in');
+
+                        var delay = randomBetween(3000, 5000); //set to 15000 and 30000 after testing? 
+                        setTimeout(showNext, delay);
+                    }, 1000);
+                }
+
+                var initialDelay = randomBetween(3000, 5000); // set to 15000 and 30000 after testing? 
+                setTimeout(showNext, initialDelay);
+            }
+
+            // Start cycling for contacts with 2+ notes
+            for (var contactId in ALL_NOTES) {
+                var notes = ALL_NOTES[contactId];
+                if (notes.length > 1) {
+                    startCycle(parseInt(contactId), notes);
+                }
+            }
+
+            // Click to go to contact page
+            document.querySelectorAll('.note-preview-cycling').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    var cid = el.getAttribute('data-contact-id');
+                    window.location.href = '/contact/' + cid;
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

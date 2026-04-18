@@ -1,0 +1,6 @@
+@echo off
+echo Initializing database...
+python init_db.py
+echo Starting app...
+start http://localhost:5000
+python app.py

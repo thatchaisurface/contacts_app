@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contacts</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Contacts</h1>
+            <p class="subtitle">{{ contacts|length }} people</p>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+
+        <form class="search-form" method="get">
+            <input type="text" name="search" placeholder="Search contacts..." value="{{ search }}">
+            <button type="submit">Search</button>
+            {% if search %}
+            <a href="/" class="btn-clear">Clear</a>
+            {% endif %}
+        </form>
+
+        <section class="contact-list">
+            {% if contacts %}
+            <ul>
+                {% for contact in contacts %}
+                <li class="contact-card">
+                    <a href="/contact/{{ contact.id }}">
+                        <div class="contact-name">{{ contact.name }}</div>
+                        <div class="contact-meta">
+                            {% if contact.relationship %}<span class="tag">{{ contact.relationship }}</span>{% endif %}
+                      {% if contact.birthday %}<span class="birthday">🎂 {{ contact.birthday|format_birthday }}</span>{% endif %}
+                        </div>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty">
+                {% if search %}
+                No contacts match "{{ search }}".
+                {% else %}
+                No contacts yet. Add one below.
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="add-form">
+            <h2>Add Contact</h2>
+            <form method="post" action="/contact/add">
+                <div class="form-row">
+                    <input type="text" name="name" placeholder="Name *" required>
+                    <input type="text" name="relationship" placeholder="Relationship (friend, colleague...)">
+                </div>
+                <div class="form-row">
+                    <input type="date" name="birthday" placeholder="Birthday">
+                    <button type="submit">Add</button>
+                </div>
+            </form>
+        </section>
+    </div>
+</body>
+</html>

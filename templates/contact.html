@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ contact.name }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .note { position: relative; }
+        .note-actions {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: none;
+            gap: 6px;
+        }
+        .note:hover .note-actions { display: flex; }
+        .note-action-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #888;
+        }
+        .note-action-btn:hover { color: #0066cc; background: #e8f0fe; }
+        .note-action-btn.delete:hover { color: #dc3545; background: #fce8e8; }
+
+        .note-edit-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            resize: vertical;
+            min-height: 80px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+        }
+        .note-edit-actions { display: flex; gap: 8px; }
+        .note-edit-actions button {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            border: none;
+        }
+        .note-edit-actions .btn-save {
+            background: #0066cc;
+            color: #fff;
+        }
+        .note-edit-actions .btn-cancel {
+            background: #888;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="back-link">← Back</a>
+            <h1>{{ contact.name }}</h1>
+            <p class="subtitle">
+                {% if contact.relationship %}{{ contact.relationship }}{% endif %}
+                {% if contact.birthday %} · 🎂 {{ contact.birthday|format_birthday }}{% endif %}
+
+            </p>
+        </header>
+
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+
+        <section class="edit-form">
+            <h2>Details</h2>
+            <form method="post" action="/contact/{{ contact.id }}/update">
+                <div class="form-row">
+                    <input type="text" name="name" value="{{ contact.name }}" required>
+                    <input type="text" name="relationship" value="{{ contact.relationship or '' }}" placeholder="Relationship">
+                </div>
+                <div class="form-row">
+                    <label>Birthday <input type="date" name="birthday" value="{{ contact.birthday or '' }}"></label>
+                    <label>Last Contacted <input type="date" name="last_contacted" value="{{ contact.last_contacted or '' }}"></label>
+                </div>
+                <div class="form-row">
+                    <button type="submit">Save Changes</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="notes-section">
+            <h2>Notes (<span id="note-count">{{ notes|length }}</span>)</h2>
+
+            <div class="notes-feed">
+                {% if notes %}
+                {% for note in notes %}
+                <div class="note" id="note-{{ note.id }}">
+                    <div class="note-actions">
+                        <button class="note-action-btn edit" onclick="startEdit({{ note.id }})" title="Edit">✏️</button>
+                        <button class="note-action-btn delete" onclick="deleteNote({{ note.id }})" title="Delete">🗑️</button>
+                    </div>
+                    <div class="note-date" id="note-date-{{ note.id }}"></div>
+                    <div class="note-content" id="note-content-{{ note.id }}"></div>
+                    <input type="hidden" id="note-created-{{ note.id }}" value="{{ note.created_at }}">
+                    <input type="hidden" id="note-updated-{{ note.id }}" value="{{ note.updated_at or '' }}">
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty">No notes yet. Add one below.</div>
+                {% endif %}
+            </div>
+
+            <form class="note-form" method="post" action="/contact/{{ contact.id }}/notes/add">
+                <textarea name="content" placeholder="New note / fact about {{ contact.name }}..." rows="3" required></textarea>
+                <button type="submit">Save Note</button>
+            </form>
+        </section>
+
+        <section class="danger-zone">
+            <form method="post" action="/contact/{{ contact.id }}/delete" onsubmit="return confirm('Delete {{ contact.name }}? This cannot be undone.');">
+                <button type="submit" class="btn-delete">Delete Contact</button>
+            </form>
+        </section>
+    </div>
+
+    <script>
+        var NOTES_DATA = {{ notes|list|tojson }};
+
+        // Format: DD-MMM-YYYY h:iMA T
+function formatDate(isoString) {
+    if (!isoString) return '';
+    var d = new Date(isoString);
+    if (isNaN(d.getTime())) return '';
+
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var day = (d.getDate() < 10 ? '0' : '') + d.getDate();
+    var month = months[d.getMonth()];
+    var year = d.getFullYear();
+
+    // Format time using locale: lowercase am/pm, no leading zero on hour
+    var timeParts = d.toLocaleString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/Los_Angeles'
+    });
+
+    // Get Pacific timezone abbreviation (PDT/PST)
+    var tzParts = d.toLocaleString('en-US', {
+        timeZoneName: 'short',
+        timeZone: 'America/Los_Angeles'
+    }).split(' ');
+    var tzStr = tzParts[tzParts.length - 1];
+
+    return day + '-' + month + '-' + year + ' ' + timeParts + ' ' + tzStr;
+}
+
+        function buildDateLine(createdAt, updatedAt) {
+            var created = formatDate(createdAt);
+            var edited = (updatedAt && updatedAt !== createdAt) ? formatDate(updatedAt) : null;
+            if (edited) return created + ' · edited ' + edited;
+            return created;
+        }
+
+        function renderNotes() {
+            NOTES_DATA.forEach(function(note) {
+                document.getElementById('note-date-' + note.id).textContent = buildDateLine(note.created_at, note.updated_at);
+                document.getElementById('note-content-' + note.id).textContent = note.content;
+            });
+        }
+        renderNotes();
+
+        function startEdit(noteId) {
+            var contentEl = document.getElementById('note-content-' + noteId);
+            var currentContent = contentEl.textContent;
+            var noteEl = contentEl.parentElement;
+            var actionsEl = noteEl.querySelector('.note-actions');
+
+            contentEl.style.display = 'none';
+            actionsEl.style.display = 'none';
+
+            var textarea = document.createElement('textarea');
+            textarea.className = 'note-edit-textarea';
+            textarea.id = 'note-textarea-' + noteId;
+            textarea.value = currentContent;
+
+            var actionsDiv = document.createElement('div');
+            actionsDiv.className = 'note-edit-actions';
+            actionsDiv.innerHTML =
+                '<button class="btn-save" onclick="saveNote(' + noteId + ')">Save</button>' +
+                '<button class="btn-cancel" onclick="cancelEdit(' + noteId + ', ' + JSON.stringify(currentContent).replace(/"/g, '&quot;') + ')">Cancel</button>';
+
+            noteEl.appendChild(textarea);
+            noteEl.appendChild(actionsDiv);
+        }
+
+        function cancelEdit(noteId, originalContent) {
+            var textarea = document.getElementById('note-textarea-' + noteId);
+            var actionsDiv = textarea.nextElementSibling;
+            textarea.remove();
+            actionsDiv.remove();
+
+            var contentEl = document.getElementById('note-content-' + noteId);
+            contentEl.style.display = '';
+            contentEl.textContent = originalContent;
+            document.querySelector('#note-' + noteId + ' .note-actions').style.display = '';
+        }
+
+        function saveNote(noteId) {
+            var textarea = document.getElementById('note-textarea-' + noteId);
+            var newContent = textarea.value.trim();
+            if (!newContent) {
+                alert('Note cannot be empty.');
+                return;
+            }
+
+            fetch('/notes/' + noteId, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: newContent })
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error('Save failed');
+                return res.json();
+            })
+            .then(function(data) {
+                var actionsDiv = textarea.nextElementSibling;
+                textarea.remove();
+                actionsDiv.remove();
+
+                var contentEl = document.getElementById('note-content-' + noteId);
+                contentEl.style.display = '';
+                contentEl.textContent = newContent;
+
+                // Update the in-memory note so re-renders are correct
+                var noteObj = NOTES_DATA.find(function(n) { return n.id === noteId; });
+                if (noteObj) noteObj.updated_at = data.updated_at;
+
+                var createdAt = document.getElementById('note-created-' + noteId).value;
+                var updatedAt = data.updated_at;
+                document.getElementById('note-date-' + noteId).textContent = buildDateLine(createdAt, updatedAt);
+                document.querySelector('#note-' + noteId + ' .note-actions').style.display = '';
+            })
+            .catch(function(err) {
+                alert('Error saving note: ' + err.message);
+            });
+        }
+
+        function deleteNote(noteId) {
+            if (!confirm('Delete this note?')) return;
+            fetch('/notes/' + noteId, { method: 'DELETE' })
+            .then(function(res) {
+                if (!res.ok) throw new Error('Delete failed');
+                var noteEl = document.getElementById('note-' + noteId);
+                if (noteEl) noteEl.remove();
+                var countEl = document.getElementById('note-count');
+                if (countEl) {
+                    countEl.textContent = parseInt(countEl.textContent) - 1;
+                }
+            })
+            .catch(function(err) {
+                alert('Error deleting note: ' + err.message);
+            });
+        }
+    </script>
+</body>
+</html>
