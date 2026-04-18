@@ -1,23 +1,22 @@
 # Contacts App Changelog
 
-## 2026-04-17 — Add sorting and filtering
+## 2026-04-17 — Instant client-side sort, filter, and search
 
-### Changes (app.py, templates/index.html)
+### Changes (templates/index.html)
 
-**Sorting** — dropdown with four options (all persisted in URL params):
-- A → Z (name ascending, default)
-- Z → A (name descending)
-- Newest first (by created_at DESC)
-- Oldest first (by created_at ASC)
-
-**Filtering** — dropdown populated dynamically from distinct relationship values in the database. Shows "All" by default, plus one option per unique relationship stored in your contacts.
+**Client-side filtering and sorting** — all contact list filtering, sorting, and search now happen instantly in the browser with no page reload. Dropdowns and search act in real-time.
 
 **How it works:**
-- Sort + filter selections are passed as URL query params (`?sort=newest&filter=Family`)
-- They combine with the existing search — you can search within a filtered/sorted view
-- "Clear" button resets search, sort, and filter back to defaults
-- Contact count in the header reflects the filtered set
-- Empty state message accounts for filter being active
+- Each `<li class="contact-card">` carries `data-name`, `data-relationship`, and `data-created` attributes
+- JavaScript reads these on every input/change event, filters and reorders DOM nodes in-place
+- Note cycling animations preserved — DOM nodes are moved, not recreated
+- Person count in header updates live as results narrow
+
+**Note:** URL no longer reflects filter/sort state (no query params). Page refresh resets to all contacts, A→Z.
+
+### 2026-04-17 — Add sorting and filtering
+
+**Sorting** — dropdown with four options (all persisted in URL params):
 
 ## 2026-04-13 — Fix inconsistent spacing in contact card note preview area
 

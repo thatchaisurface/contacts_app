@@ -63,31 +63,29 @@
         {% endif %}
         {% endwith %}
 
-        <form class="search-form" method="get">
-            <input type="text" name="search" placeholder="Search contacts..." value="{{ search }}">
-            <select name="sort">
+        <form class="search-form" method="get" id="search-form">
+            <input type="text" name="search" id="search-input" placeholder="Search contacts..." value="{{ search }}">
+            <select name="sort" id="sort-select">
                 <option value="name_asc"   {% if sort == 'name_asc' %}selected{% endif %}>A → Z</option>
                 <option value="name_desc"  {% if sort == 'name_desc' %}selected{% endif %}>Z → A</option>
                 <option value="newest"     {% if sort == 'newest' %}selected{% endif %}>Newest first</option>
                 <option value="oldest"     {% if sort == 'oldest' %}selected{% endif %}>Oldest first</option>
             </select>
-            <select name="filter">
+            <select name="filter" id="filter-select">
                 <option value="">All</option>
                 {% for rel in relationships %}
                 <option value="{{ rel }}" {% if filter_rel == rel %}selected{% endif %}>{{ rel }}</option>
                 {% endfor %}
             </select>
-            <button type="submit">Apply</button>
             {% if search or sort != 'name_asc' or filter_rel %}
             <a href="/" class="btn-clear">Clear</a>
             {% endif %}
         </form>
 
         <section class="contact-list">
-            {% if contacts %}
-            <ul>
+            <ul id="contact-list">
                 {% for contact in contacts %}
-                <li class="contact-card">
+                <li class="contact-card" data-id="{{ contact.id }}" data-name="{{ contact.name }}" data-relationship="{{ contact.relationship or '' }}" data-created="{{ contact.created_at }}">
                     <a href="/contact/{{ contact.id }}">
                         <div class="contact-name">{{ contact.name }}</div>
                         <div class="contact-meta">
@@ -114,15 +112,7 @@
                 </li>
                 {% endfor %}
             </ul>
-            {% else %}
-            <div class="empty">
-                {% if search or filter_rel %}
-                No contacts match{% if search %} "{{ search }}"{% endif %}{% if filter_rel %} in "{{ filter_rel }}"{% endif %}.
-                {% else %}
-                No contacts yet. Add one below.
-                {% endif %}
-            </div>
-            {% endif %}
+            <div class="empty" id="empty-state" style="display:none"></div>
         </section>
 
         <section class="add-form">
@@ -145,6 +135,70 @@
         var ALL_NOTES = {{ notes_by_contact|tojson }};
 
         (function() {
+            // --- Contact list management ---
+            var searchInput    = document.getElementById('search-input');
+            var sortSelect     = document.getElementById('sort-select');
+            var filterSelect   = document.getElementById('filter-select');
+            var contactList    = document.getElementById('contact-list');
+            var emptyState     = document.getElementById('empty-state');
+            var subtitle       = document.querySelector('.subtitle');
+
+            // Build array of all contact <li> elements
+            var allCards = Array.from(contactList.querySelectorAll('.contact-card'));
+
+            function applyFilters() {
+                var searchTerm  = (searchInput.value || '').toLowerCase().trim();
+                var sortVal     = sortSelect.value;
+                var filterVal   = filterSelect.value;
+
+                // Filter cards
+                var visible = allCards.filter(function(card) {
+                    var name        = (card.dataset.name        || '').toLowerCase();
+                    var relationship= (card.dataset.relationship|| '').toLowerCase();
+                    var matchesSearch = !searchTerm || name.includes(searchTerm);
+                    var matchesFilter = !filterVal  || relationship === filterVal;
+                    return matchesSearch && matchesFilter;
+                });
+
+                // Sort cards in-place within the <ul>
+                visible.sort(function(a, b) {
+                    if (sortVal === 'name_asc')  return a.dataset.name.localeCompare(b.dataset.name);
+                    if (sortVal === 'name_desc') return b.dataset.name.localeCompare(a.dataset.name);
+                    if (sortVal === 'newest')    return b.dataset.created.localeCompare(a.dataset.created);
+                    if (sortVal === 'oldest')    return a.dataset.created.localeCompare(b.dataset.created);
+                    return 0;
+                });
+
+                // Detach all, re-append sorted visible ones
+                allCards.forEach(function(card) { card.remove(); });
+                visible.forEach(function(card)  { contactList.appendChild(card); });
+
+                // Show/hide empty state and update count
+                var count = visible.length;
+                emptyState.style.display = count === 0 ? 'block' : 'none';
+                subtitle.textContent = count + ' people';
+
+                if (count === 0) {
+                    var parts = [];
+                    if (searchTerm) parts.push('"' + searchTerm + '"');
+                    if (filterVal)  parts.push(filterVal);
+                    emptyState.textContent = (parts.length ? 'No contacts match ' : 'No contacts yet.') +
+                        (parts.length ? parts.join(' in ') + '.' : ' Add one below.');
+                }
+            }
+
+            // Live search — no debounce, instant filter as you type
+            if (searchInput) {
+                searchInput.addEventListener('input', applyFilters);
+            }
+            if (sortSelect) {
+                sortSelect.addEventListener('change', applyFilters);
+            }
+            if (filterSelect) {
+                filterSelect.addEventListener('change', applyFilters);
+            }
+
+            // --- Note cycling (unchanged — DOM nodes persist) ---
             function randomBetween(min, max) {
                 return Math.floor(Math.random() * (max - min + 1)) + min;
             }
@@ -179,12 +233,12 @@
                         el.classList.remove('fade-out');
                         el.classList.add('fade-in');
 
-                        var delay = randomBetween(3000, 5000); //set to 15000 and 30000 after testing? 
+                        var delay = randomBetween(3000, 5000);
                         setTimeout(showNext, delay);
                     }, 1000);
                 }
 
-                var initialDelay = randomBetween(3000, 5000); // set to 15000 and 30000 after testing? 
+                var initialDelay = randomBetween(3000, 5000);
                 setTimeout(showNext, initialDelay);
             }
 
